@@ -1,21 +1,23 @@
 import getpass, imaplib, email.parser, os, re
-#part 1:
+#Stable, finished, functions:
 def createdirectory(start,name):
     if not os.path.exists(start+"/"+name):
         os.makedirs(start+"/"+name)
-doneID      = []
-mailboxes   = {}
-done={}
 
-origin      = os.getcwd()
-createdirectory(origin,"mail")
+guess = "<Unknown>"
+def start():
+    global doneID, mailboxes, done, origin
+    doneID      = []
+    mailboxes   = {}
+    done={}
 
-#Mail Module
+    origin      = os.getcwd()
+    createdirectory(origin,"mail")
+
 def getvalue(header,CurLine):
     CurLine=CurLine.strip()
     if CurLine[:len(header)] == header:
         return CurLine[len(header):].strip()
-
 
 def str2bool(v):
     if v.lower() == "true":
@@ -58,16 +60,19 @@ def GetFullMessage(ID,mailbox):
     if typ != 'OK':
         print "ERROR getting message", ID
     else:
-        return email.message_from_string(msg_data[0][1])
+#        return email.message_from_string(msg_data[0][1])
+        msg_data = "".join(str(email.message_from_string(msg_data[0][1])).split("=\r\n"))
+        return msg_data
 
 def createraw(ID,mailbox):
     msg = GetFullMessage(ID,mailbox)
     createdirectory(origin+"/mail/"+mailbox+"/unsorted",ID)
-    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "a").close()
-    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "w")
+    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw1", "a").close()
+    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw1", "w")
     raw.write(str(msg))
     raw.close()
-    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "r")
+    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "a").close()
+    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw1", "r")
     values = mail_list(raw)
     raw.close()
     rawwrite=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "w")
@@ -75,53 +80,217 @@ def createraw(ID,mailbox):
     rawwrite.write(value)
     rawwrite.close()
 
+#Less stable functions:
 def mail_list(msg):
     body=[""]
-    finalbody=[""]
     count=0
-    while True:
-        line=msg.readline()
-        if not line:
-            break
-        elif line[0:1]== " " or line == "":
-            body[count]=body[count]+line[:len(line)-1]#Problem is it always adds to body 0
+    try:
+        while True:
+            line=msg.readline()
+            if not line:
+                break
+            else:
+                lines=line.split(";")
+                counter = 0
+                for string in lines:
+                    counter +=1
+                    try:
+                        if lines[0] != line and counter ==2:
+                            count+=1
+                            counter+=1
+                            body.append(string.strip())
+                        else:
+                            raise Exception('spam')
+                    except:
+                        if string[0:1]== " " or string == "":
+                            body[count]=body[count]+string[:len(string)].strip()
+                        else:
+                            count+=1
+                            body.append(string[0:len(string)].strip())
+        return body
+    except:
+        pass
+
+def processto(to):
+    users = []
+    mails = []
+    curmail=""
+    curuser=""
+    mode = "user"
+    defined = False
+    to = to.split(",")
+    for group in to:
+        for char in group:
+    # to test if mode should change:
+            if char == "<":
+                mode = "mail"
+                defined = True
+            elif char == ">":
+                mode = "user"
+                curuser = curuser.strip()
+                defined = True
+                if curuser.strip() == "":
+                    curuser= guess
+                users.append(curuser)
+                mails.append(curmail)
+                curmail=""
+                curuser=""
+    #now it has been established the mode will not change
+            elif mode == "mail":
+                curmail+=char
+            elif mode == "user":
+                curuser+=str(char)
+    if defined:
+        usermail = [users,mails]
+    else:
+        usermail = [[guess], [curuser]]
+    return usermail
+
+def processfrom(From):
+    mail=""
+    user=""
+    mode = "user"
+    for char in From:
+# to test if mode should change:
+        if char == "<":
+            mode = "mail"
+        elif char == ">":
+            mode = "user"
+        elif mode == "mail":
+            mail+=char
+        elif mode == "user":
+            user+=char
+    usermail = [user.strip().strip('"').strip("'"),mail.strip()]
+    return usermail
+
+def processhtml(html):
+    mode = "none"
+    current = ""
+    for char in html:
+        if char == "<":
+            mode = "begin phrase"
+        elif char == ">":
+            mode = "none"
+#now it has been established the mode will not change
+        elif mode == "begin phrase"and char.lower() == "i" or char.lower() == "m" or char.lower() == "g":
+            current += char
+            counter +=1
+            if counter == 3:
+                pass
         else:
-            count+=1
-            body.append(line[0:len(line)-1])
-        for line in body:
-            try:
-                line2=line.split(";")
-                for thing in line2:
-                    finalbody.append(thing)
-            except:
-                finalbody.append(line)
-    return body
+            counter = 0
+            curent = ""
+
+def dateproc2(date2, month1, month2, monthnum):
+    try:
+        if date2.strip().lower() == month1 or date2.strip().lower() == month2 and len(date2) > 1:
+            return monthnum
+        else:
+            return date2
+    except:
+        return date2
+
+
+def processdate(date):
+    date2 = {
+        "day":guess,
+        "month":guess,
+        "time":guess,
+        "year":guess
+    }
+    date = date.strip().split()
+    date2["day"] = date[1]
+    date2["month"] = date[2]
+    date[2] = dateproc2(date[2], "jan", "january", 1)
+    date[2] = dateproc2(date[2], "feb", "february", 2)
+    date[2] = dateproc2(date[2], "mar", "march", 3)
+    date[2] = dateproc2(date[2], "apr", "april", 4)
+    date[2] = dateproc2(date[2], "may", "may", 5)
+    date[2] = dateproc2(date[2], "jun", "june", 6)
+    date[2] = dateproc2(date[2], "jul", "july", 7)
+    date[2] = dateproc2(date[2], "aug", "august", 8)
+    date[2] = dateproc2(date[2], "sep", "september", 9)
+    date[2] = dateproc2(date[2], "oct", "october", 10)
+    date[2] = dateproc2(date[2], "nov", "november", 11)
+    date[2] = dateproc2(date[2], "dec", "december", 12)
+    print date[2]
+    return date
+def processinfo(header):
+    headers= header
+#returns string of Content Type
+    headers["Content-Type:"] = headers["Content-Type:"].strip()
+#Returns String of Boundary in multi-part messages, if no boundary it return "<Unknown>"
+    headers["boundary"]=headers["boundary"].strip()[1:].strip('"').strip('"')
+#Returns a list that contains: a list of Recipient names (<unknown> if unknown) and a list of email addresses in such a way that To[0][4] is the name assigned to the address To[1][4]
+    headers["To:"]=processto(headers["To:"])
+#returns a list of: [Username,email address]
+    headers["From:"]=processfrom((headers["From:"]))
+#Returns a string of the Subject
+    headers["Subject:"]=headers["Subject:"].strip()
+#Returns a string of the Encoding, this is not likely to be used due to it already being decoded, but was included as a precaution (i.e. the more you know)
+    headers["Content-Transfer-Encoding:"]=headers["Content-Transfer-Encoding:"].strip()
+#Returns <day of the week><day of the month><month><year><minute><hour><time zone>
+    headers["Date:"]=processdate(headers["Date:"].strip())
+    headers["charset"]=processCharset(headers["charset"].strip().strip("=").strip().strip('"').strip("'").strip())
+    headers["List-Unsubscribe:"] = headers["List-Unsubscribe:"]
+    return headers
+
+def processCharset(charset):
+    charsets = [
+"big5"        ,        # - Chinese Traditional (Big5)
+"euc-kr"      ,        # - Korean (EUC)
+"iso-8859-1"  ,        # - Western Alphabet
+"iso-8859-2"  ,        # - Central European Alphabet (ISO)
+"iso-8859-3"  ,        # - Latin 3 Alphabet (ISO)
+"iso-8859-4"  ,        # - Baltic Alphabet (ISO)
+"iso-8859-5"  ,        # - Cyrillic Alphabet (ISO)
+"iso-8859-6"  ,        # - Arabic Alphabet (ISO)
+"iso-8859-7"  ,        # - Greek Alphabet (ISO)
+"iso-8859-8"  ,        # - Hebrew Alphabet (ISO)
+"koi8-r"      ,        # - Cyrillic Alphabet (KOI8-R)
+"shift-jis"   ,        # - Japanese (Shift-JIS)
+"x-euc"       ,        # - Japanese (EUC)
+"utf-8"       ,        # - Universal Alphabet (UTF-8)
+"windows-1250",        # - Central European Alphabet (Windows)
+"windows-1251",        # - Cyrillic Alphabet (Windows)
+"windows-1252",        # - Western Alphabet (Windows)
+"windows-1253",        # - Greek Alphabet (Windows)
+"windows-1254",        # - Turkish Alphabet
+"windows-1255",        # - Hebrew Alphabet (Windows)
+"windows-1256",        # - Arabic Alphabet (Windows)
+"windows-1257",        # - Baltic Alphabet (Windows)
+"windows-1258",        # - Vietnamese Alphabet (Windows)
+"windows-874",         # - Thai (Windows)
+"UTF-8",
+"KOI8",
+"us-ascii"
+
+]
+    for chars in charsets:
+        try:
+            place=charset.lower().index(chars.lower())
+            charset2 = charset[place:len(chars)+1]
+            return charset2.lower()
+        except:
+            pass
 
 def get_info(ID,mailbox):
     createraw(ID,mailbox)
     createdirectory("/mail/bluebox/unsorted/"+ID,"info")
     raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "r")
     MIME=True
-    Boundary = False
-    To      =       "<Unknown>"
-    From    =       "<Unknown>"
-    place   =       "<Unknown>"
-    Subject =       "<Unknown>"
-    ConType =       "<Unknown>"
-    Encoding =      "<Unknown>"
-    Date    =       "<Unknown>"
-    Charset =       "<Unknown>"
-    Unsubscribe =   "<Unknown>"
+    global boundaries
+    boundaries = []
     headers={
-    'Boundary' : False,
-    'To:'          :       "<Unknown>",
-    'From:'        :       "<Unknown>",
-    'Subject:'     :       "<Unknown>",
-    'Content-Type:':       "<Unknown>",
-    'Encoding:'    :       "<Unknown>",
-    'Date:'        :       "<Unknown>",
-    'Charset:'     :       "<Unknown>",
-    'Unsubscribe:' :       "<Unknown>",
+    'boundary'     :              "<Unknown>",
+    'To:'          :              "<Unknown>",
+    'From:'        :              "<Unknown>",
+    'Subject:'     :              "<Unknown>",
+    'Content-Type:':              "<Unknown>",
+    'Content-Transfer-Encoding:': "<Unknown>",
+    'Date:'        :              "<Unknown>",
+    'charset'      :              "<Unknown>",
+    'List-Unsubscribe:' :         "<Unknown>",
     }
 
     values=mail_list(raw)
@@ -130,203 +299,15 @@ def get_info(ID,mailbox):
             potential = getvalue(header,line)
             if headers[header]=="<Unknown>"and potential != None:
                 headers[header]=potential
-    print str(headers)
 
-"""def M_Breakdown(ID,mailbox):
-    global done
-    done={}
-    createraw(ID,mailbox)
-    info=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/info", "a").close()
-    info=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/info", "a")
-    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "r")
-    MIME=True
-    Boundary = False
-    To = "Unknown"
-    From = "Unknown"
-    place = "Unknown"
-    Subject = "Unknown"
-    ConType = "Unknown"
-    Encoding = "Unknown"
-    Date = "Unknown"
-    Charset = "Unknown"
-    Unsubscribe = "Unknown"
-    # noinspection PyStatementEffect
-    while True:
-            CurLine=str(raw.readline())
-            From=getvalue("From:",CurLine,[False])
-            Subject=getvalue("Subject:",CurLine,[False])
-            ConType=getvalue("Content-Type:",CurLine,[True,"",";",True])
-            if CurLine[0:3] == "To:":
-                To=CurLine[4:]
-                To=To.strip()
-                To=re.split("([<])",To)
-            elif not CurLine:
-                break
-                ConType=CurLine[14:place].split()
-            elif CurLine[0:26] =="Content-Transfer-Encoding:":
-                Encoding=CurLine[26:].split()
-            elif CurLine[0:5]=="Date:":
-                Date=CurLine[6:].split()
-            elif CurLine[0:17]=="List-Unsubscribe":
-                Unsubscribe=CurLine[18:].split()
-            try:
-                CurLine.index("charset")
-                try:
-                    begin = CurLine.index('"')
-                    end = CurLine[(begin+1):].index('"')
-                    end+=begin+1
-                    begin+=1
-                    Charset = CurLine[begin:end]
-                except:
-                    try:
-                        begin = CurLine.index("'")
-                        end = CurLine[(begin+1):].index("'")
-                        end+=begin+1
-                        begin+=1
-                        Charset = CurLine[begin:end]
-                    except:
-                        begin =CurLine.index('=')
-                        begin+=1
-                        Charset = CurLine[begin:].split()
-            except:
-                    pass
-            if type(Boundary) != str:
-                try:
-                    place=CurLine.lower().index("boundary")
-                    Boundary=True
-                except:
-                    Boundary = False
-                if Boundary:
-                    try:
-                        begin = CurLine.index('"')
-                        end = CurLine[(begin+1):].index('"')
-                        end+=begin+1
-                        begin+=1
-                        Boundary = CurLine[begin:end].split()
-                    except:
-                        try:
-                            begin = CurLine.index("'")
-                            end = CurLine[(begin+1):].index("'")
-                            end+=begin+1
-                            begin+=1
-                            Boundary = CurLine[begin:end].split()
-                        except:
-                            begin =CurLine.index('=')
-                            begin+=1
-                            Boundary = CurLine[begin:].split()
-            if CurLine[0:5]=="Date:":
-                #########################fix
-                date = CurLine[6:]
-                date=date.replace(",","")
-                date=date.split()
-                Time=date[5]
-                date=[]
-                for num in date:
-                    Date.append(num)
-                    Date.append("~!")
-                Date="".join(Date)
-    values=mail_list
-    for line in values:
-
-    print From
-    print Subject
-    Toaddr=[]
-    touser=[]
-    pair=False
-    n="\n"
-    to=To
-    count=-1
-    for thing in to:
-        count+=1
-        try:
-            place=thing.index(" ")
-            if place==0:
-                To[count]=thing[1:]
-        except:
-            pass
-    for thing in To:
-        if thing[0:1]!='<':
-            pair = True
-            touser.append(thing.strip())
-        elif thing[0:1] =="<" and pair==True:
-            pair= False
-            Toaddr.append(thing.strip())
-        else:
-            Toaddr.append(thing.strip())
-            touser.append("NOID")
-    Touser=""
-    touser
-    for thing in touser:
-        Touser+=thing
-
-        
-    info.write(str("~!".join(Toaddr))+n)
-    info.write(Touser+n)
-    adbegin=From.index("<")
-    adend=From.index(">")
-    if place==0:
-        info.write(From[adbegin:adend]+n)
-    else:
-        info.write(From[0:adbegin]+"~!"+From[adbegin:adend]+n)
-    info.write(Subject+n)
-    info.write(str(MIME)+n)
-    if MIME:
-        info.write(str(ConType)+n)
-        info.write(str(" ".join(Encoding))+n)
-        if type(Boundary)==list:
-            info.write(str(Boundary.join(" "))+n)
-    info.write(Date+n)
-    try:
-        info.write(Charset+n)
-    except:
-        info.write(" ".join(Charset)+n)
-    try:
-        info.write(Unsubscribe.join()+n)
-    except:
-        pass
-    info.close()
-    raw.close()
-    body=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/body", "a").close()
-    body=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/body", "a")
-    raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "r")
-    msgbody = []
-    count = -1
-    go = False
-    counter = 0
-    boundary=False
-    while 1==1:
-        count+=1
-        
-        CurLine=str(raw.readline())
-
-        if not CurLine:#if current line does not exist, as the message has ended, this ends the program
-            break
-        elif go:
-            msgbody.append(CurLine)
-            counter+=1
-        else:
-            pass        
-            
-    if MIME:
-        for msg in msgbody:
-            body.write(msg)
-    else:
-        body.write("MIME = False, email may not display correctly.")
-        for msg in msgbody:
-            body.write(msg)
-    print "Content is:"+ConType
-    print boundary
-    body.close()
-    raw.close()
-"""
-#hi=[False,True,False]
-#print getvalue("Subject:","Subject: hi",hi)
-#print str("hia")
+    headers = processinfo(headers)
+    return headers
 
 #login for testing
-login("gmail.com","username","password","bluebox")
+start()
+login("gmail.com","username","********","bluebox")
 
 #testing code
 unread = get_new_ID("bluebox",False)
 for msg in unread:
-    get_info(msg,"bluebox")
+    print get_info(msg,"bluebox")
