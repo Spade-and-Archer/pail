@@ -10,7 +10,6 @@ def start():
     doneID      = []
     mailboxes   = {}
     done={}
-
     origin      = os.getcwd()
     createdirectory(origin,"mail")
 
@@ -28,15 +27,12 @@ def str2bool(v):
         return False
 
 def login(host,username,password,name):
-    try:
-        createdirectory(origin+"/mail",name)
-        createdirectory(origin+"/mail/"+name,"unsorted")
-        mailboxes[name]=(imaplib.IMAP4_SSL("imap."+host))
-        mailboxes[name].login(username, password)
-        mailboxes[name].select()
-    except:
-        print 'Invalid username, password, or directory name'
-        print 'Errors may include: slashes, punctuation, spaces, unrecognized characters or invalid usernames or passwords'
+
+    createdirectory(origin+"/mail",name)
+    createdirectory(origin+"/mail/"+name,"unsorted")
+    mailboxes[name]=(imaplib.IMAP4_SSL("imap."+host))
+    mailboxes[name].login(username, password)
+    mailboxes[name].select()
 
 def get_new_ID(mail,check):
     global doneID
@@ -182,45 +178,58 @@ def processhtml(html):
             curent = ""
 
 def dateproc2(date2, month1, month2, monthnum):
+    """This function simply checks if the month is equal to either month1 or month2 and, if it is, converts it to monthnum. It was getting tiresome to copy/paste this in constantly."""
     try:
-        if date2.strip().lower() == month1 or date2.strip().lower() == month2 and len(date2) > 1:
+        if date2.strip().strip(',').strip().strip('"').strip().strip("'").strip().lower() == month1 or date2.strip().lower() == month2 and len(date2) > 1:
             return monthnum
         else:
             return date2
     except:
         return date2
 
-
-def processdate(date):
-    date2 = {
+def processdate(raw_date):
+    """takes date and converts it to a list of <day of the week><day of the month><month><year><minute><hour> in utc"""
+#Original Date = 'Thu,', '17', mar, '2014', '07:50:10', '+0000'
+#                   0      1    2     3         4         5
+    newdate = {
+        "weekday" : guess,
         "day":guess,
         "month":guess,
         "time":guess,
         "year":guess
     }
-    date = date.strip().split()
-    date2["day"] = date[1]
-    date2["month"] = date[2]
-    date[2] = dateproc2(date[2], "jan", "january", 1)
-    date[2] = dateproc2(date[2], "feb", "february", 2)
-    date[2] = dateproc2(date[2], "mar", "march", 3)
-    date[2] = dateproc2(date[2], "apr", "april", 4)
-    date[2] = dateproc2(date[2], "may", "may", 5)
-    date[2] = dateproc2(date[2], "jun", "june", 6)
-    date[2] = dateproc2(date[2], "jul", "july", 7)
-    date[2] = dateproc2(date[2], "aug", "august", 8)
-    date[2] = dateproc2(date[2], "sep", "september", 9)
-    date[2] = dateproc2(date[2], "oct", "october", 10)
-    date[2] = dateproc2(date[2], "nov", "november", 11)
-    date[2] = dateproc2(date[2], "dec", "december", 12)
-    print date[2]
-    return date
+    raw_date = raw_date.strip().split()
+    newdate["day"] = raw_date[1]
+    newdate["year"] = raw_date[3]
+    raw_date[2] = dateproc2(raw_date[2], "jan", "january", 1)
+    raw_date[2] = dateproc2(raw_date[2], "feb", "february", 2)
+    raw_date[2] = dateproc2(raw_date[2], "mar", "march", 3)
+    raw_date[2] = dateproc2(raw_date[2], "apr", "april", 4)
+    raw_date[2] = dateproc2(raw_date[2], "may", "may", 5)
+    raw_date[2] = dateproc2(raw_date[2], "jun", "june", 6)
+    raw_date[2] = dateproc2(raw_date[2], "jul", "july", 7)
+    raw_date[2] = dateproc2(raw_date[2], "aug", "august", 8)
+    raw_date[2] = dateproc2(raw_date[2], "sep", "september", 9)
+    raw_date[2] = dateproc2(raw_date[2], "oct", "october", 10)
+    raw_date[2] = dateproc2(raw_date[2], "nov", "november", 11)
+    raw_date[2] = dateproc2(raw_date[2], "dec", "december", 12)
+    newdate["month"] = raw_date[2]
+    raw_date[0] = dateproc2(raw_date[0], "mon", "monday", 1)
+    raw_date[0] = dateproc2(raw_date[0], "tue", "tuesday", 2)
+    raw_date[0] = dateproc2(raw_date[0], "wed", "wednesday", 3)
+    raw_date[0] = dateproc2(raw_date[0], "thu", "thursday", 4)
+    raw_date[0] = dateproc2(raw_date[0], "fri", "friday", 5)
+    raw_date[0] = dateproc2(raw_date[0], "sat", "saturday", 6)
+    raw_date[0] = dateproc2(raw_date[0], "sun", "sunday", 7 )
+    newdate["weekday"] = raw_date[0]
+    return newdate
+
 def processinfo(header):
     headers= header
 #returns string of Content Type
     headers["Content-Type:"] = headers["Content-Type:"].strip()
 #Returns String of Boundary in multi-part messages, if no boundary it return "<Unknown>"
-    headers["boundary"]=headers["boundary"].strip()[1:].strip('"').strip('"')
+    headers["boundary"]=headers["boundary"].strip()[1:].strip().strip('"').strip('"')
 #Returns a list that contains: a list of Recipient names (<unknown> if unknown) and a list of email addresses in such a way that To[0][4] is the name assigned to the address To[1][4]
     headers["To:"]=processto(headers["To:"])
 #returns a list of: [Username,email address]
@@ -229,7 +238,7 @@ def processinfo(header):
     headers["Subject:"]=headers["Subject:"].strip()
 #Returns a string of the Encoding, this is not likely to be used due to it already being decoded, but was included as a precaution (i.e. the more you know)
     headers["Content-Transfer-Encoding:"]=headers["Content-Transfer-Encoding:"].strip()
-#Returns <day of the week><day of the month><month><year><minute><hour><time zone>
+#Returns <day of the week><day of the month><month><year><minute><hour>
     headers["Date:"]=processdate(headers["Date:"].strip())
     headers["charset"]=processCharset(headers["charset"].strip().strip("=").strip().strip('"').strip("'").strip())
     headers["List-Unsubscribe:"] = headers["List-Unsubscribe:"]
@@ -278,7 +287,6 @@ def get_info(ID,mailbox):
     createraw(ID,mailbox)
     createdirectory("/mail/bluebox/unsorted/"+ID,"info")
     raw=open(origin+"/mail/"+mailbox+"/unsorted/"+ID+"/raw", "r")
-    MIME=True
     global boundaries
     boundaries = []
     headers={
@@ -292,10 +300,9 @@ def get_info(ID,mailbox):
     'charset'      :              "<Unknown>",
     'List-Unsubscribe:' :         "<Unknown>",
     }
-
     values=mail_list(raw)
     for line in values:
-        for header in headers:
+        for  header in headers:
             potential = getvalue(header,line)
             if headers[header]=="<Unknown>"and potential != None:
                 headers[header]=potential
@@ -305,9 +312,14 @@ def get_info(ID,mailbox):
 
 #login for testing
 start()
-login("gmail.com","username","********","bluebox")
+login("gmail.com","username","*********","bluebox")
 
 #testing code
 unread = get_new_ID("bluebox",False)
 for msg in unread:
     print get_info(msg,"bluebox")
+
+def notes():
+    """
+     When processing qouted printable text the text must be decoded with https://docs.python.org/2/library/quopri.html#quopri.decode  v
+    """
