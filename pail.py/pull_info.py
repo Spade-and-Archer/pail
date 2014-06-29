@@ -1,4 +1,4 @@
-import getpass, imaplib, email.parser, os, re, glob,create_message
+import getpass, imaplib, email.parser, os, re, glob,create_message,base64
 #Stable, finished, functions:
 def createdirectory(start,name):
     if not os.path.exists(start+"/"+name):
@@ -41,8 +41,8 @@ def load_messages(mail_file):
         pass
 
 def getvalue(header,CurLine):
-    CurLine=CurLine.strip().lower()
-    if CurLine[:len(header)] == header.lower():
+    CurLine=CurLine.strip()
+    if CurLine[:len(header)].lower() == header.lower():
         return CurLine[len(header):].strip()
 
 def str2bool(v):
@@ -61,23 +61,30 @@ def login(host,username,password,name):
     mailboxes[name].login(username, password)
     mailboxes[name].select()
 
-def get_new_ID(mail,check):
+def openLoop(filepath,arg,num,after):
+    try:
+        file = open(filepath + str(num)+str(after),arg)
+        return file
+    except:
+        if num > 1000:
+            return openLoop(filepath,arg,str(int(num)-1),after)
+
+def get_new_ID(mail,check,largest = 0):
     global doneIDs
-    largest = 0
-    for ID in doneIDs:
-        if doneIDs != [] and int(ID.strip().strip(',').strip()) > int(largest):
-            largest = ID
-    print "largest is" + str(largest)
+    if largest == 0:
+        for ID in doneIDs:
+            if doneIDs != [] and int(ID.strip().strip(',').strip()) > int(largest):
+                largest = ID
+        print "largest is" + str(largest)
     if largest != 0:
         try:
             print origin
-            infos = glob.glob(origin+'mail/' + mail+'/*/'+largest+'/info')
-            for info in infos:
-                try:
-                    info1 = open(info,'r')
-                    info = info1
-                except:
-                    pass
+            infoPaths = glob.glob(origin+'mail/' + mail+'/*/'+str(largest)+'/')
+            for infoPath in infoPaths:
+                infoPath = '/'.join(infoPath.split('\\'))
+                infoPath = '/'.join(infoPath.split('\\\\'))
+                infoPath = '/'.join(infoPath.split('/')[:len(infoPath.split('/'))-2])
+                info = openLoop(str(infoPath)+'/','r',str(largest),'/info')
             count = 0
             while True:
                 CurLine = info.readline()
@@ -87,17 +94,16 @@ def get_new_ID(mail,check):
                 if count == 9:
                     LastDate = processdate(CurLine[7:], True)
                     print LastDate
+            LastDate = LastDate.split()
+            FormattedLastDate = LastDate[1] +'-' + LastDate[2] + '-' + LastDate[3]
+            rv, new_ID = mailboxes[mail].uid('search', None,'(SINCE ' + FormattedLastDate + ')')
+            new_ID = new_ID[0].split()
+            print new_ID
         except:
-            pass
-    LastDate = LastDate.split()
-    FormattedLastDate = LastDate[1] +'-' + LastDate[2] + '-' + LastDate[3]
-    rv, new_ID = mailboxes[mail].uid('search', None,'(SINCE ' + FormattedLastDate + ')')
-    new_ID = new_ID[0].split()
-    #new_ID should be a list of uids (in the form of integers) specifying all of the messages sent either on the same day as the last message downloaded or afterwards
-
-    #the code below removes any uids that have already been done, but were included because time cannot be specified, and they were sent on the same date as the last message
+            return get_new_ID(mail,check,int(int(largest) - 1))
+#   new_ID should be a list of uids (in the form of integers) specifying all of the messages sent either on the same day as the last message downloaded or afterwards
+#   the code below removes any uids that have already been done, but were included because time cannot be specified, and they were sent on the same date as the last message
     non_duplicated = []
-    temp = ''
     for ID in new_ID:
         try:
             for DoneID in doneIDs:
@@ -134,21 +140,34 @@ def createraw(ID,mailbox):
 
 def mail_list(msg):
     body=[""]
-    count=0
     try:
         while True:
-            line=msg.readline()
-            if not line:
+            CurLine=msg.readline()
+            if not CurLine:
                 break
             else:
-                lines=line.split(";")
-                counter = 0
-                for string in lines:
-                    counter +=1
+                parts=CurLine.split(";")
+                count = -1
+                """
+                for part in parts:
+                    if part == "":
+                        mode = "append"
+                    elif part[0:1] == "":
+                        mode = "append"
+                    else:
+                        mode = "new"
+                    if mode == "append":
+                        body[count] = body[count] + str(part)
+                    else:
+                        body.append(str(part))
+                """
+                count = 0
+                for string in parts:
+                    count +=1
                     try:
-                        if lines[0] != line and counter ==2:
+                        if parts[0] != CurLine and count ==2:
                             count+=1
-                            counter+=1
+                            count+=1
                             body.append(string.strip())
                         else:
                             raise Exception('spam')
@@ -245,9 +264,10 @@ def dateproc2(date, month1, month2, monthnum, deconvert):
         convert_to = monthnum
     if deconvert and date == option1 or date == option2 and len(date) < 3:
         return convert_to
-    elif not deconvert:
+    elif not deconvert and type(date) == str:
         if date.strip().strip(',').strip().strip('"').strip().strip("'").strip().lower() == option1 or date.strip().strip(',').strip().strip('"').strip().strip("'").strip().lower() == option2 and date > 1:
             return monthnum
+    return date
 
 def processdate(raw_date,deconvert=False):
     """takes date and converts it to a dict e.g. {'time': '7:13:20', 'month': 4, 'year': '2013', 'weekday': 1, 'day': '22'} in utc"""
@@ -262,7 +282,7 @@ def processdate(raw_date,deconvert=False):
         raw_date = raw_date.strip().split()
     else:
         new_raw_date = []
-        raw_date = raw_date[1:int(len(raw_date))-2].split('><')
+        raw_date = raw_date[:int(len(raw_date))-2].split('><')
         new_raw_date.append(raw_date[1])
         new_raw_date.append(raw_date[2])
         new_raw_date.append(raw_date[3])
@@ -274,7 +294,7 @@ def processdate(raw_date,deconvert=False):
             try:
                 new_raw_date[count] = int(new_raw_date[count])
             except:
-                pass
+                print 'NOOOOOOOOOOOOOOOOOOOOOOOO'
         raw_date = new_raw_date
     newdate["day"] = raw_date[1]
     newdate["year"] = raw_date[3]
@@ -349,7 +369,7 @@ def processdate(raw_date,deconvert=False):
     else:
         time = raw_date[4]
         time = ':'.join(time)
-        time = time + ' +0000'
+        time += ' +0000'
         print time
         count = -1
         for item in raw_date:
@@ -415,11 +435,14 @@ def processCharset(charset):
 ]
     for chars in charsets:
         try:
-            place=charset.lower().index(chars.lower())
-            charset2 = charset[place:len(chars)+1]
-            return charset2.lower()
+            #place=charset.lower().index(chars.lower())
+            #charset2 = charset[place:len(chars)+1]
+            #return charset2.lower()
+            if chars.lower() == charset.lower().strip().strip('"').strip("'").strip():
+                return chars
         except:
             pass
+    return charset.lower()
 
 def get_info(ID,mailbox):
     createraw(ID,mailbox)
@@ -475,6 +498,7 @@ def capitalize(name):
             mode = 'lower'
         elif count != 0:
             Final_name += letter.lower()
+
     return Final_name
 
 def find_name(username,email,raw_name,raw_email):
@@ -548,8 +572,7 @@ def save_info(ID,mailbox,username,email):
     if info['List-Unsubscribe:'] != guess:
         info['List-Unsubscribe:'] = info['List-Unsubscribe:'].strip('<').strip('>')
     file_string += 'List-Unsubscribe: <' + info['List-Unsubscribe:'] + '>\n'
-    file_string += 'Subject: <' + info['Subject:'].capitalize() + '>\n'
-
+    file_string += 'Subject: <' + info['Subject:'] + '>\n'
     file.write(file_string)
     print file_string
     print ID
@@ -570,4 +593,8 @@ for msg in unread:
 def notes():
     """
      When processing qouted printable text the text must be decoded with https://docs.python.org/2/library/quopri.html#quopri.decode  v
+     subject must be converted before being displayed and will appear as giberish in the info file
+    if info['Subject:'][:10].lower() == '=?utf-8?b?':
+        info['Subject:'] = unicode(base64.b64decode(info['Subject:'][10:len(info['Subject:'])-2]),'utf-8')
     """
+ ad
